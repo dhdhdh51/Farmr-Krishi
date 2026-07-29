@@ -1,8 +1,12 @@
 # Krishi Connect - Setup Guide
 
-## Quick Start (For Android Phone / Termux Users)
+## Quick Start (Android Phone Only — No PC Needed)
 
-This project is designed to be built entirely via **GitHub Actions** — no PC or local Flutter SDK needed. Follow these steps:
+This project builds entirely via **GitHub Actions** — no PC, no local Flutter SDK, no Android Studio.
+
+**Minimum path to a working APK:** Firebase setup (Step 1) → seed data (Step 2) → add one secret (Step 3) → run the build (Step 4) → install (Step 5).
+
+Release signing with a keystore is **optional** and can be added later.
 
 ---
 
@@ -64,61 +68,87 @@ This project is designed to be built entirely via **GitHub Actions** — no PC o
 
 ---
 
-## Step 3: Generate a Signing Keystore
+## Step 3: Add GitHub Repository Secrets
 
-On any system with Java/keytool (or use Termux):
+Go to your GitHub repo → **Settings** → **Secrets and variables** → **Actions** → **New repository secret**
 
-```bash
-keytool -genkey -v -keystore keystore.jks -keyalg RSA -keysize 2048 -validity 10000 -alias krishiconnect
-```
-
-Enter a password when prompted (remember it!). This creates `keystore.jks`.
-
----
-
-## Step 4: Add GitHub Repository Secrets
-
-Go to your GitHub repo → Settings → Secrets and variables → Actions → New repository secret
-
-Add these secrets:
+### Required (only one)
 
 | Secret Name | Value |
 |---|---|
-| `KEYSTORE_BASE64` | Base64-encoded keystore. Run: `base64 -i keystore.jks` (copy the output) |
-| `KEY_ALIAS` | `krishiconnect` (or whatever you used with keytool) |
-| `KEY_PASSWORD` | The password you entered during keytool |
-| `STORE_PASSWORD` | Same password (or different if you set differently) |
-| `GOOGLE_SERVICES_JSON` | Full contents of `google-services.json` file |
+| `GOOGLE_SERVICES_JSON` | The **full contents** of the `google-services.json` you downloaded from Firebase — including the outer `{` and `}` |
 
-### How to base64 encode in Termux:
-```bash
-base64 keystore.jks | tr -d '\n'
-```
-Copy the entire output and paste as `KEYSTORE_BASE64` secret.
+That's the minimum. With just this secret the build succeeds and produces a **debug-signed APK** you can install on your own phone.
 
-### How to get google-services.json content:
+> The workflow validates this secret is present and is valid JSON, and fails with a clear message if not. The Google Services Gradle plugin cannot build without it.
+
+### Optional (for a properly release-signed APK)
+
+Release signing is **not required to get a working APK**. Add these four secrets only when you want a real signed release (e.g. before Play Store submission):
+
+| Secret Name | Value |
+|---|---|
+| `KEYSTORE_BASE64` | Base64-encoded keystore, as a single line |
+| `KEY_ALIAS` | e.g. `krishiconnect` |
+| `KEY_PASSWORD` | Your key password |
+| `STORE_PASSWORD` | Your keystore password |
+
+If `KEYSTORE_BASE64` is absent, the workflow logs a warning and the release build falls back to debug signing automatically — it does **not** fail.
+
+<details>
+<summary>How to generate the keystore later (needs Java/keytool, e.g. Termux)</summary>
+
 ```bash
-cat google-services.json
+pkg install openjdk-17 -y
+
+keytool -genkeypair -v \
+  -keystore keystore.jks \
+  -storetype JKS \
+  -keyalg RSA \
+  -keysize 2048 \
+  -validity 10000 \
+  -alias krishiconnect \
+  -storepass YOUR_PASSWORD \
+  -keypass YOUR_PASSWORD \
+  -dname "CN=Krishi Connect, OU=Dev, O=KrishiConnect, L=City, S=State, C=IN"
+
+# Encode to a single line for the GitHub secret
+base64 keystore.jks | tr -d '\n' > keystore_base64.txt
 ```
-Copy the entire JSON and paste as `GOOGLE_SERVICES_JSON` secret.
+
+**Back up `keystore.jks` somewhere safe.** Losing it means future updates can't install over an existing copy of the app.
+
+</details>
 
 ---
 
-## Step 5: Trigger the Build
+## Step 4: Trigger the Build
 
-- Push any change to `main` branch, OR
-- Go to Actions tab → "Build Signed APK" → "Run workflow"
-- Wait ~5 minutes for the build to complete
-- Download the APK from the workflow's **Artifacts** section
+- Push any change to `main`, OR
+- Go to the **Actions** tab → **Build APK** → **Run workflow**
+- Wait ~5 minutes
+- Download the APK from the run's **Artifacts** section
+
+### Debug-signed vs release-signed
+
+| | Debug-signed (no keystore secrets) | Release-signed (keystore secrets added) |
+|---|---|---|
+| Installs by sideloading | ✅ Yes | ✅ Yes |
+| Good for testing | ✅ Yes | ✅ Yes |
+| Play Store upload | ❌ No | ✅ Yes |
+| Consistent update key | ❌ No | ✅ Yes |
+
+To install a debug-signed APK you may need to enable **Install unknown apps** for your browser or file manager in Android settings.
 
 ---
 
-## Step 6: Install APK
+## Step 5: Install APK
 
-1. Go to GitHub Actions → completed workflow run
-2. Scroll to "Artifacts" section
+1. Go to GitHub **Actions** → the completed workflow run
+2. Scroll to the **Artifacts** section
 3. Download `krishi-connect-release.zip`
-4. Extract and install the APK on your Android phone
+4. Extract it and install the APK on your Android phone
+5. Log in as admin: use the **Email** tab with `admin@krishiconnect.app` and the password you set in Firebase
 
 ---
 
